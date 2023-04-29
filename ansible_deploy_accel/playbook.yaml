@@ -1,0 +1,16 @@
+# main.yaml playbook, run install_software on host 192.168.122.
+---
+- name: "accel-deployment"
+  hosts: accel
+  user: root
+  become: true
+  gather_facts: false
+  vars:
+    - abcd: 1234
+
+  tasks:
+   
+    - name: "install_software"
+      include_tasks: tasks/install_software.yaml
+      vars:
+        - abcd: 1234

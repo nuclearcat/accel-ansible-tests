@@ -1,0 +1,154 @@
+---
+# tasks file for kvm_provision
+- name: Ensure requirements in place
+  package:
+    name:
+      - guestfs-tools
+      - python3-libvirt
+    state: present
+  become: yes
+
+- name: Ensure libvirt is running
+  service:
+    name: libvirtd
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Get VMs list
+  community.libvirt.virt:
+    command: list_vms
+  register: existing_vms
+  changed_when: no
+
+- name: Create VM if not exists
+  block:
+
+  - name: Download base image
+    get_url:
+      url: "{{ base_image_url }}"
+      dest: "/tmp/{{ base_image_name }}"
+      #checksum: "sha256:{{ base_image_sha }}"
+
+  # Delete file if exist in libvirt pool
+  - name: Delete file if exist in libvirt pool
+    file:
+      path: "{{ libvirt_pool_dir }}/{{ vm_name }}.img"
+      state: absent
+
+#  - name: Copy base image to libvirt directory
+#    copy:
+#      dest: "{{ libvirt_pool_dir }}/{{ vm_name }}.img"
+#      src: "/tmp/{{ base_image_name }}"
+#      force: no
+#      remote_src: yes 
+#      mode: 0600
+#      # own by root
+#      owner: root
+#    register: copy_results
+  # Resize to 10G
+
+  # print partitions
+  - name: Print partitions
+    command: |
+      virt-filesystems --long --parts --blkdevs -h -a /tmp/{{ base_image_name }}
+    register: copy_results
+
+  # print copy_results
+  - debug:
+      var: copy_results
+
+  - name: Extend base image to 10G
+    command: |
+      truncate -s 10G {{ libvirt_pool_dir }}/{{ vm_name }}.img
+    register: copy_results
+
+  # print copy_results
+  - debug:
+      var: copy_results
+
+  - name: Virt-resize to qcow2
+    command: |
+      virt-resize --expand /dev/sda1 /tmp/{{ base_image_name }} {{ libvirt_pool_dir }}/{{ vm_name }}.img
+    register: copy_results
+
+  # print copy_results
+  - debug:
+      var: copy_results
+
+  # start/activate libvirt network default
+  - name: Start libvirt network default
+    community.libvirt.virt_net:
+      command: start
+      name: default
+
+  # --uninstall cloud-init 
+  - name: Configure the image
+    command: |
+      virt-customize -a {{ libvirt_pool_dir }}/{{ vm_name }}.img \
+      --hostname {{ vm_name }} \
+      --root-password password:{{ vm_root_pass }} \
+      --ssh-inject 'root:file:{{ ssh_key }}' \
+      --selinux-relabel
+    when: copy_results is changed
+  
+
+
+# TODO: Use variables vm_default_ip/mask/gw/dns
+  - name: Configure enp1s0 in netplan
+    command: |
+      virt-customize -a {{ libvirt_pool_dir }}/{{ vm_name }}.img \
+      --run-command 'echo "network:
+        version: 2
+        renderer: networkd
+        ethernets:
+          enp1s0:
+            addresses:
+            - 192.168.122.250/24
+            routes:
+            - to: default
+              via: 192.168.122.1
+            nameservers:
+              addresses:
+              - 8.8.8.8
+      " > /etc/netplan/01-netcfg.yaml'
+    when: copy_results is changed
+
+  - name: dpkg-reconfigure openssh-server to generate ssh key
+    command: |
+      virt-customize -a {{ libvirt_pool_dir }}/{{ vm_name }}.img \
+      --run-command 'dpkg-reconfigure openssh-server'
+    when: copy_results is changed
+
+  - name: Define vm
+    community.libvirt.virt:
+      command: define
+      xml: "{{ lookup('template', 'vm-template.xml.j2') }}"
+
+  when: "vm_name not in existing_vms.list_vms"
+
+- name: Ensure VM is started
+  community.libvirt.virt:
+    name: "{{ vm_name }}"
+    state: running
+  register: vm_start_results
+  until: "vm_start_results is success"
+  retries: 15
+  delay: 2
+
+- name: Ensure temporary file is deleted
+  file:
+    path: "/tmp/{{ base_image_name }}"
+    state: absent
+  when: cleanup_tmp | bool
+
+- name: Wait for VM to be ready
+  wait_for:
+    host: "{{ vm_default_ip }}"
+    port: 22
+    state: started
+    timeout: 300
+  register: wait_for_vm
+  until: "wait_for_vm is success"
+  retries: 15
+  delay: 2

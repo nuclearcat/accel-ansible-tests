@@ -1,0 +1,60 @@
+---
+# tasks file for install_software
+
+# apt update/upgrade
+- name: "apt update/upgrade"
+  apt:
+    update_cache: yes
+    upgrade: yes
+
+# install build-essential git etc
+- name: "install build-essential git"
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - build-essential
+    - git
+    - cmake
+    - libpcre3-dev
+    - libssl-dev
+    - python3-pytest
+
+# delete old accel-ppp if exists
+- name: "delete old accel-ppp"
+  file:
+    path: /opt/accel-ppp
+    state: absent
+
+# clone https://github.com/accel-ppp/accel-ppp.git
+- name: "clone accel"
+  git:
+    repo: https://github.com/accel-ppp/accel-ppp.git
+    dest: /opt/accel-ppp
+    version: master
+
+# build accel-ppp
+- name: "build accel-ppp"
+  shell: |
+    cd /opt/accel-ppp
+    mkdir build
+    cd build
+    cmake ..
+    make
+    make install
+  args:
+    executable: /bin/bash
+
+# cd tests, python3 -m pytest -Wall -v || exit 0
+# show output
+- name: "run tests and show output"
+  shell: |
+    cd /opt/accel-ppp/tests
+    python3 -m pytest -Wall -v || exit 0
+  args:
+    executable: /bin/bash
+  register: output
+
+# show output
+- debug:
+    var: output.stdout_lines

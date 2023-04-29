@@ -1,0 +1,18 @@
+---
+# defaults file for kvm_provision
+#base_image_name: jammy-server-cloudimg-amd64-disk-kvm.img
+base_image_name: jammy-server-cloudimg-amd64.img
+base_image_url: https://cloud-images.ubuntu.com/jammy/current/{{ base_image_name }}
+base_image_sha: 59c2363fd71b0bfc0bc32f31cb536b50d50dca30e0b9b9aabe6d99d47aa6a1c3
+#bb1d4818061978dad94bd1ecc94453a27c7d227e4e772d5161484a40fb65fd15
+libvirt_pool_dir: "/var/lib/libvirt/images"
+vm_name: accel-ppp
+vm_vcpus: 2
+vm_ram_mb: 2048
+vm_net: default
+vm_root_pass: test123
+cleanup_tmp: no
+ssh_key: /root/.ssh/id_rsa.pub
+vm_default_ip: 192.168.122.250
+vm_default_mask: /24
+vm_default_gw: 192.168.122.1
