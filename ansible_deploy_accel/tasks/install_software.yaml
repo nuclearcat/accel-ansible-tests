@@ -19,6 +19,7 @@
     - libpcre3-dev
     - libssl-dev
     - python3-pytest
+    - ppp
 
 # delete old accel-ppp if exists
 - name: "delete old accel-ppp"
@@ -29,9 +30,10 @@
 # clone https://github.com/accel-ppp/accel-ppp.git
 - name: "clone accel"
   git:
-    repo: https://github.com/accel-ppp/accel-ppp.git
+    #repo: https://github.com/accel-ppp/accel-ppp.git
+    repo: https://github.com/nuclearcat/accel-ppp
     dest: /opt/accel-ppp
-    version: master
+    version: fix-calling-sid-logic
 
 # build accel-ppp
 - name: "build accel-ppp"
